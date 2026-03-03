@@ -233,7 +233,7 @@ export default function App() {
           <div>
             <h1 className={styles.title}>
               <span className={styles.titleIcon}>✦</span>
-              Task Tracker
+              Nerdo's Tracker
             </h1>
             <p className={styles.subtitle}>Stay focused, get things done.</p>
           </div>
