@@ -223,8 +223,8 @@ export default function App() {
     return (
       <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{
-          width: 36, height: 36, border: '3px solid rgba(124,109,240,0.2)',
-          borderTopColor: '#7c6df0', borderRadius: '50%',
+          width: 36, height: 36, border: '3px solid rgba(97,31,105,0.2)',
+          borderTopColor: '#611f69', borderRadius: '50%',
           animation: 'spin 0.7s linear infinite'
         }} />
       </div>
@@ -322,6 +322,7 @@ export default function App() {
               <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" width="16" height="16">
                 <path d="M7 17H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3M14 14l4-4-4-4M18 10H8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
+              Logout
             </button>
           </div>
         </div>
@@ -391,8 +392,8 @@ export default function App() {
         {loadingTasks ? (
           <div className={styles.empty}>
             <div style={{
-              width: 32, height: 32, border: '3px solid rgba(124,109,240,0.2)',
-              borderTopColor: '#7c6df0', borderRadius: '50%',
+              width: 32, height: 32, border: '3px solid rgba(97,31,105,0.2)',
+              borderTopColor: '#611f69', borderRadius: '50%',
               animation: 'spin 0.7s linear infinite', margin: '0 auto 1rem'
             }} />
             <p className={styles.emptyTitle}>Cargando tareas...</p>
