@@ -29,6 +29,11 @@
   --radius-sm: 8px;
   --shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
   --transition: 0.22s cubic-bezier(.4, 0, .2, 1);
+
+  /* Aliases for auth components */
+  --bg: var(--bg-primary);
+  --surface: var(--bg-card);
+  --text: var(--text-primary);
 }
 
 body {
@@ -67,4 +72,10 @@ body::after {
 #root {
   position: relative;
   z-index: 1;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }

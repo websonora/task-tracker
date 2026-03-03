@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
+import { supabase } from './supabase'
+import Auth from './Auth'
 import styles from './App.module.css'
 
 const FILTERS = ['All', 'Active', 'Completed']
@@ -8,10 +10,6 @@ const PRIORITIES = [
   { label: 'Medium', color: '#fbbf24' },
   { label: 'High', color: '#f87171' },
 ]
-
-function generateId() {
-  return Math.random().toString(36).slice(2, 11)
-}
 
 function TaskItem({ task, onToggle, onDelete, onEdit }) {
   const [confirming, setConfirming] = useState(false)
@@ -39,6 +37,8 @@ function TaskItem({ task, onToggle, onDelete, onEdit }) {
     if (e.key === 'Enter') handleEditSave()
     if (e.key === 'Escape') { setEditText(task.text); setEditing(false) }
   }
+
+  const date = new Date(task.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 
   return (
     <div
@@ -77,7 +77,7 @@ function TaskItem({ task, onToggle, onDelete, onEdit }) {
             <span className={styles.priorityBadge} style={{ color: priority.color, background: `${priority.color}18` }}>
               {priority.label}
             </span>
-            <span className={styles.taskDate}>{task.date}</span>
+            <span className={styles.taskDate}>{date}</span>
           </div>
         </div>
       </div>
@@ -181,35 +181,99 @@ function AddTaskModal({ onAdd, onClose }) {
 }
 
 export default function App() {
-  const [tasks, setTasks] = useState([
-    { id: generateId(), text: 'Review design mockups', priority: 'High', completed: false, date: 'Mar 2' },
-    { id: generateId(), text: 'Set up project repository', priority: 'Medium', completed: true, date: 'Mar 1' },
-    { id: generateId(), text: 'Write unit tests for auth module', priority: 'Low', completed: false, date: 'Mar 2' },
-  ])
+  const [session, setSession] = useState(undefined) // undefined = loading, null = no auth
+  const [tasks, setTasks] = useState([])
   const [filter, setFilter] = useState('All')
   const [showModal, setShowModal] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [loadingTasks, setLoadingTasks] = useState(true)
 
-  const addTask = (text, priority) => {
-    const now = new Date()
-    const date = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-    setTasks(prev => [{ id: generateId(), text, priority, completed: false, date }, ...prev])
+  // ── Auth listener ──
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session)
+    })
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session)
+    })
+    return () => subscription.unsubscribe()
+  }, [])
+
+  // ── Fetch tasks from Supabase when authenticated ──
+  useEffect(() => {
+    if (!session) {
+      setTasks([])
+      setLoadingTasks(false)
+      return
+    }
+    const fetchTasks = async () => {
+      setLoadingTasks(true)
+      const { data, error } = await supabase
+        .from('tasks')
+        .select('*')
+        .order('created_at', { ascending: false })
+      if (!error && data) setTasks(data)
+      setLoadingTasks(false)
+    }
+    fetchTasks()
+  }, [session])
+
+  // ── Show loading spinner while checking auth ──
+  if (session === undefined) {
+    return (
+      <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{
+          width: 36, height: 36, border: '3px solid rgba(124,109,240,0.2)',
+          borderTopColor: '#7c6df0', borderRadius: '50%',
+          animation: 'spin 0.7s linear infinite'
+        }} />
+      </div>
+    )
   }
 
-  const toggleTask = (id) => {
-    setTasks(prev => prev.map(t => t.id === id ? { ...t, completed: !t.completed } : t))
+  // ── Show Auth screen if not logged in ──
+  if (!session) {
+    return <Auth />
   }
 
-  const deleteTask = (id) => {
+  // ── CRUD operations with Supabase ──
+  const addTask = async (text, priority) => {
+    const { data, error } = await supabase
+      .from('tasks')
+      .insert({ text, priority, user_id: session.user.id })
+      .select()
+      .single()
+    if (!error && data) {
+      setTasks(prev => [data, ...prev])
+    }
+  }
+
+  const toggleTask = async (id) => {
+    const task = tasks.find(t => t.id === id)
+    if (!task) return
+    const newVal = !task.completed
+    setTasks(prev => prev.map(t => t.id === id ? { ...t, completed: newVal } : t))
+    await supabase.from('tasks').update({ completed: newVal }).eq('id', id)
+  }
+
+  const deleteTask = async (id) => {
     setTasks(prev => prev.filter(t => t.id !== id))
+    await supabase.from('tasks').delete().eq('id', id)
   }
 
-  const editTask = (id, text) => {
+  const editTask = async (id, text) => {
     setTasks(prev => prev.map(t => t.id === id ? { ...t, text } : t))
+    await supabase.from('tasks').update({ text }).eq('id', id)
   }
 
-  const clearCompleted = () => {
+  const clearCompleted = async () => {
+    const completedIds = tasks.filter(t => t.completed).map(t => t.id)
     setTasks(prev => prev.filter(t => !t.completed))
+    await supabase.from('tasks').delete().in('id', completedIds)
+  }
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
   }
 
   const filteredTasks = tasks.filter(t => {
@@ -237,17 +301,29 @@ export default function App() {
             </h1>
             <p className={styles.subtitle}>Stay focused, get things done.</p>
           </div>
-          <button
-            id="add-task-btn"
-            className={styles.addBtn}
-            onClick={() => setShowModal(true)}
-            aria-label="Add task"
-          >
-            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" width="18" height="18">
-              <path d="M10 4v12M4 10h12" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-            </svg>
-            Add Task
-          </button>
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            <button
+              id="add-task-btn"
+              className={styles.addBtn}
+              onClick={() => setShowModal(true)}
+              aria-label="Add task"
+            >
+              <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" width="18" height="18">
+                <path d="M10 4v12M4 10h12" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+              </svg>
+              Add Task
+            </button>
+            <button
+              className={styles.logoutBtn}
+              onClick={handleLogout}
+              aria-label="Logout"
+              title={session.user.email}
+            >
+              <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" width="16" height="16">
+                <path d="M7 17H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3M14 14l4-4-4-4M18 10H8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+          </div>
         </div>
 
         {/* Stats */}
@@ -312,7 +388,16 @@ export default function App() {
 
       {/* Task List */}
       <main className={styles.taskList}>
-        {filteredTasks.length === 0 ? (
+        {loadingTasks ? (
+          <div className={styles.empty}>
+            <div style={{
+              width: 32, height: 32, border: '3px solid rgba(124,109,240,0.2)',
+              borderTopColor: '#7c6df0', borderRadius: '50%',
+              animation: 'spin 0.7s linear infinite', margin: '0 auto 1rem'
+            }} />
+            <p className={styles.emptyTitle}>Cargando tareas...</p>
+          </div>
+        ) : filteredTasks.length === 0 ? (
           <div className={styles.empty}>
             <div className={styles.emptyIcon}>
               {searchQuery ? '🔍' : filter === 'Completed' ? '🎉' : '✨'}
